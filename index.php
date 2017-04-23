@@ -1,6 +1,8 @@
 <?php
 
 /**
+ * NOTE: This script was modified by Richard Griffith <richard@geekwright.com> to
+ * support database configuration discovery in a XOOPS environment.
  *
  * Safe Search and Replace on Database with Serialized Data v3.1.0
  *
@@ -124,6 +126,7 @@ class icit_srdb_ui extends icit_srdb {
 
 	public $is_wordpress = false;
 	public $is_drupal = false;
+    public $is_xoops = false;
 
 	public function __construct() {
 
@@ -190,6 +193,25 @@ class icit_srdb_ui extends icit_srdb {
 			}
 
 			$this->response( $name, $user, $pass, $host, $port, $charset, $collate );
+
+        } elseif( $bootstrap && $this->is_xoops() ) {
+            // populate db details
+            $name 		= XOOPS_DB_NAME;
+            $user 		= XOOPS_DB_USER;
+            $pass 		= XOOPS_DB_PASS;
+            $host 		= XOOPS_DB_HOST;
+            $port		= '';
+            $charset 	= XOOPS_DB_CHARSET;
+            $collate 	= '';
+
+            $port_as_string = (string)$port ? (string)$port : "0";
+            if ( (string)abs( (int)$port ) !== $port_as_string ) {
+                $port = 3306;
+            } else {
+                $port = (string)abs( (int)$port );
+            }
+
+            $this->response( $name, $user, $pass, $host, $port, $charset, $collate );
 
 		} else {
 
@@ -714,6 +736,44 @@ class icit_srdb_ui extends icit_srdb {
 		return false;
 	}
 
+    public function is_xoops() {
+
+        $path_mod = '/..';
+        $depth = 0;
+        $max_depth = 2;
+        $bootstrap_file = 'mainfile.php';
+
+        while( ! file_exists( dirname( __FILE__ ) . "{$path_mod}/{$bootstrap_file}" ) ) {
+            $path_mod .= '/..';
+            if ( $depth++ >= $max_depth )
+                break;
+        }
+
+        if ( file_exists( dirname( __FILE__ ) . "{$path_mod}/{$bootstrap_file}" ) ) {
+
+            try {
+                $xoopsOption['nocommon'] = true;
+                // require the bootstrap include
+                include( dirname( __FILE__ ) . "{$path_mod}/{$bootstrap_file}" );
+
+                // define drupal root
+                if (defined( 'XOOPS_DB_USER' ) ) {
+                    // confirm environment
+                    $this->set('is_xoops', true);
+
+                    return true;
+                }
+
+            } catch( Exception $error ) {
+                // We can't add_error here as 'db' because if the db errors array is not empty, the interface doesn't activate!
+                // This is a consequence of the 'complete' method in JavaScript
+                $this->add_error( 'XOOPS detected but could not retrieve configuration. There might be a PHP error, possibly caused by changes to the database', 'recoverable_db' );
+            }
+
+        }
+
+        return false;
+    }
 
 	/**
 	 * Search through the file name passed for a set of defines used to set up
@@ -1016,7 +1076,7 @@ class icit_srdb_ui extends icit_srdb {
 
 					<div class="field field-short">
 						<label for="pass">pass</label>
-						<input id="pass" name="pass" type="text" value="<?php $this->esc_html_attr( $this->pass, true ); ?>" />
+						<input id="pass" name="pass" type="password" value="<?php $this->esc_html_attr( $this->pass, true ); ?>" />
 					</div>
 
 					<div class="field field-short">
@@ -1554,6 +1614,7 @@ class icit_srdb_ui extends icit_srdb {
 			.field-long input[type="text"],
 			.field-medium input[type="text"],
 			.field-short input[type="text"],
+            .field-short input[type="password"],
 			.field-long input[type="email"],
 			.field-medium input[type="email"],
 			.field-short input[type="email"] {
@@ -1587,6 +1648,7 @@ class icit_srdb_ui extends icit_srdb {
 			}
 
 			input[type="text"],
+			input[type="password"],
 			input[type="email"],
 			.regex-left,
 			.regex-right {
